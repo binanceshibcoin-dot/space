@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar System Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html, body { height:100%; overflow:hidden; background:#04040f; color:#fff; font-family:'Space Grotesk',sans-serif; }
+body { display:flex; flex-direction:column; }
+
+/* ── STARS ── */
+#starfield { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+
+@keyframes twinkle {
+  0%,100% { opacity:var(--lo,0.2); }
+  50%      { opacity:var(--hi,0.9); }
+}
+
+/* ── LAYOUT ── */
+.layout { display:flex; flex:1; overflow:hidden; position:relative; z-index:10; }
+
+/* ── SIDEBAR ── */
+aside {
+  width:190px; flex-shrink:0;
+  border-right:1px solid rgba(255,255,255,0.06);
+  overflow-y:auto; scrollbar-width:none;
+  padding:14px 0;
+}
+aside::-webkit-scrollbar { display:none; }
+
+.planet-btn {
+  display:flex; align-items:center; gap:13px;
+  width:100%; padding:10px 18px;
+  background:none; border:none;
+  border-right:2px solid transparent;
+  color:rgba(255,255,255,0.32);
+  cursor:pointer;
+  transition:color .25s, background .25s, border-color .25s;
+  text-align:left;
+}
+.planet-btn:hover { color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.04); }
+.planet-btn.active { color:#fff; background:rgba(255,255,255,0.07); border-right-color:var(--ac,#fff); }
+
+.mini-wrap { width:30px; height:30px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.mini-planet { border-radius:50%; box-shadow:inset -3px -3px 6px rgba(0,0,0,0.55); flex-shrink:0; }
+.btn-label { font-family:'Orbitron',sans-serif; font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; display:block; }
+.btn-sub   { font-size:9px; opacity:0.36; margin-top:2px; display:block; }
+
+/* ── STAGE ── */
+.stage {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  position:relative; padding:28px 48px; overflow:hidden;
+}
+
+.ambient {
+  position:absolute; width:520px; height:520px; border-radius:50%;
+  top:50%; left:50%; transform:translate(-50%,-50%);
+  filter:blur(95px); pointer-events:none; z-index:0;
+  transition:background-color .9s ease;
+}
+
+/* text layers */
+.stage-eyebrow, .stage-name, .stats-row, .stage-desc {
+  position:relative; z-index:2;
+  transition:opacity .35s ease, transform .35s ease;
+}
+
+.stage-eyebrow {
+  font-family:'Orbitron',sans-serif; font-size:10px; letter-spacing:0.52em;
+  color:rgba(255,255,255,0.28); text-transform:uppercase; margin-bottom:6px;
+}
+.stage-name {
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(32px, 6.5vw, 68px); font-weight:900;
+  letter-spacing:0.24em; text-transform:uppercase;
+  color:#fff; margin-bottom:40px;
+  text-shadow:0 0 60px rgba(255,255,255,0.08);
+}
+
+/* planet sphere */
+.planet-stage {
+  position:relative; z-index:2;
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:44px;
+}
+.float-wrap { animation:floatAnim 7.5s ease-in-out infinite; }
+@keyframes floatAnim {
+  0%,100% { transform:translateY(0); }
+  50%      { transform:translateY(-14px); }
+}
+.planet-sphere {
+  width:200px; height:200px; border-radius:50%;
+  transition:opacity .38s ease, transform .38s ease;
+}
+.planet-sphere.out { opacity:0; transform:scale(0.78); }
+
+/* Saturn rings */
+.planet-ring {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%) rotateX(72deg);
+  width:300px; height:300px; border-radius:50%;
+  pointer-events:none; z-index:3;
+  border:13px solid rgba(215,198,130,0.48);
+  box-shadow:0 0 0 6px rgba(192,174,112,0.22), 0 0 0 13px rgba(172,152,90,0.1);
+  transition:opacity .5s ease;
+}
+
+/* stats */
+.stats-row { display:flex; gap:44px; margin-bottom:18px; }
+.stat-item { text-align:center; }
+.stat-val { font-family:'Orbitron',sans-serif; font-size:14px; font-weight:700; color:#fff; display:block; }
+.stat-lbl { font-size:8px; letter-spacing:0.22em; text-transform:uppercase; color:rgba(255,255,255,0.28); margin-top:5px; display:block; }
+
+.stage-desc {
+  font-size:12px; line-height:1.9; color:rgba(255,255,255,0.32);
+  text-align:center; max-width:360px;
+}
+
+/* fade helper */
+.text-out { opacity:0 !important; transform:translateY(9px) !important; }
+
+/* nav arrows */
+.nav-arrows { position:absolute; bottom:22px; right:28px; display:flex; gap:8px; z-index:5; }
+.nav-btn {
+  width:34px; height:34px; border-radius:50%;
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.45); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; transition:all .2s;
+}
+.nav-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
+
+.key-hint {
+  position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+  font-size:9px; letter-spacing:0.18em; color:rgba(255,255,255,0.16);
+  z-index:5; pointer-events:none; white-space:nowrap;
+}
+</style>
+</head>
+<body>
+
+<div id="starfield"></div>
+
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,0.07); position: relative; z-index: 20;">
+  
+  <div style="font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 0.2em; color: rgba(255,255,255,0.9); flex: 1;">
+    SOLAR EXPLORER
+  </div>
+
+  <div style="display: flex; justify-content: center; flex: 1;">
+    <img src="logo.png" alt="Hamza Tariq Logo" style="height: 60px; border-radius: 5px;">
+  </div>
+
+  <div style="display: flex; justify-content: flex-end; flex: 1; font-family: 'Orbitron', sans-serif; font-size: 10px; letter-spacing: 0.25em; color: rgba(255,255,255,0.4); text-transform: uppercase;">
+    built by hamza tariq
+  </div>
+
+  <div id="hdrCurrent" style="display:none;"></div>
+</header>
+
+<div class="layout">
+  <aside id="sidebar"></aside>
+
+  <div class="stage">
+    <div class="ambient" id="ambient"></div>
+
+    <div class="stage-eyebrow" id="eyebrow">PLANET</div>
+    <div class="stage-name"   id="stageName">LOADING</div>
+
+    <div class="planet-stage">
+      <div class="planet-ring"   id="planetRing"   style="opacity:0"></div>
+      <div class="float-wrap">
+        <div class="planet-sphere" id="planetSphere"></div>
+      </div>
+    </div>
+
+    <div class="stats-row"  id="statsRow"></div>
+    <div class="stage-desc" id="stageDesc"></div>
+
+    <div class="nav-arrows">
+      <button class="nav-btn" id="prevBtn">&#8592;</button>
+      <button class="nav-btn" id="nextBtn">&#8594;</button>
+    </div>
+    <div class="key-hint">&#8592; &#8594; ARROW KEYS &nbsp;|&nbsp; CLICK PLANETS IN SIDEBAR</div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   PLANET DATA
+═══════════════════════════════════════════════════ */
+const PLANETS = [
+  {
+    id:'pluto', name:'PLUTO', eyebrow:'DWARF PLANET',
+    dist:'5.91B km', moons:5, period:'248 years', color:'#c09878',
+    bg:'radial-gradient(circle at 65% 65%, #3a2010 5%, #7a5030 38%, #b08060 65%, #d0a080 88%)',
+    glow:'rgba(155,100,55,0.13)', ms:12,
+    desc:'Once our 9th planet, Pluto was reclassified as a dwarf planet in 2006. The New Horizons probe revealed a heart-shaped nitrogen ice plain called Tombaugh Regio on its surface in 2015.'
+  },
+  {
+    id:'neptune', name:'NEPTUNE', eyebrow:'WINDIEST PLANET',
+    dist:'4.50B km', moons:16, period:'165 years', color:'#4466e0',
+    bg:'radial-gradient(circle at 65% 65%, #080d30 5%, #1530a0 38%, #2a55cc 65%, #4070e8 88%)',
+    glow:'rgba(50,80,210,0.14)', ms:19,
+    desc:'Neptune\'s winds blast at up to 2,100 km/h — the fastest in the solar system. Its moon Triton orbits in reverse and is slowly spiraling inward to an eventual collision.'
+  },
+  {
+    id:'uranus', name:'URANUS', eyebrow:'ICE GIANT',
+    dist:'2.87B km', moons:27, period:'84 years', color:'#70e0e0',
+    bg:'radial-gradient(circle at 65% 65%, #205858 5%, #3a9898 38%, #68d8d8 65%, #90ecec 88%)',
+    glow:'rgba(90,210,210,0.12)', ms:21,
+    desc:'Uranus rotates nearly on its side at a 98° tilt, causing 42-year-long polar nights. This ice giant was the first planet discovered with a telescope, spotted by William Herschel in 1781.'
+  },
+  {
+    id:'saturn', name:'SATURN', eyebrow:'THE RINGED PLANET',
+    rings:true,
+    dist:'1.43B km', moons:146, period:'29 years', color:'#d4c068',
+    bg:'radial-gradient(ellipse at 65% 65%, rgba(0,0,0,0.45), transparent 56%), radial-gradient(ellipse at 28% 28%, rgba(255,245,190,0.2), transparent 42%), repeating-linear-gradient(165deg, #ae9848 0, #dcc870 11px, #ae9848 19px, #988236 27px, #c8be60 36px, #ae9848 44px, #dccc76 52px, #ae9848 62px)',
+    glow:'rgba(195,178,80,0.13)', ms:23,
+    desc:'Saturn\'s spectacular ring system spans 282,000 km but is only about 10 metres thick. It is the least dense planet in our solar system — light enough to theoretically float on water.'
+  },
+  {
+    id:'jupiter', name:'JUPITER', eyebrow:'THE GREAT GIANT',
+    dist:'778.5M km', moons:95, period:'12 years', color:'#c88840',
+    bg:'radial-gradient(ellipse at 65% 65%, rgba(0,0,0,0.5), transparent 55%), radial-gradient(ellipse at 28% 28%, rgba(255,225,155,0.22), transparent 42%), repeating-linear-gradient(165deg, #b87030 0, #e8b860 12px, #b07030 22px, #9e6020 30px, #d49050 40px, #b07030 50px, #e8c068 58px, #b87030 68px)',
+    glow:'rgba(198,136,60,0.14)', ms:27,
+    desc:'Jupiter is so massive that 1,300 Earths could fit inside it. Its Great Red Spot — a storm wider than our entire planet — has been raging for over 350 years and is only now showing signs of shrinking.'
+  },
+  {
+    id:'mars', name:'MARS', eyebrow:'THE RED PLANET',
+    dist:'227.9M km', moons:2, period:'687 days', color:'#e05530',
+    bg:'radial-gradient(circle at 65% 65%, #4a1000 5%, #961e08 38%, #d04020 65%, #e86040 88%)',
+    glow:'rgba(195,65,25,0.14)', ms:15,
+    desc:'Mars hosts Olympus Mons, the solar system\'s tallest volcano at 22 km high, and Valles Marineris, a canyon as long as the USA is wide. Ancient river valleys point to a wetter past.'
+  },
+  {
+    id:'earth', name:'EARTH', eyebrow:'HOME PLANET',
+    dist:'149.6M km', moons:1, period:'365 days', color:'#50c8f8',
+    bg:'radial-gradient(circle at 36% 30%, rgba(38,148,80,0.78), transparent 26%), radial-gradient(circle at 62% 58%, rgba(30,128,65,0.62), transparent 20%), radial-gradient(circle at 41% 60%, rgba(26,115,58,0.55), transparent 18%), radial-gradient(circle at 65% 65%, #082045 5%, #104888 35%, #3898d8 65%, #62bef0 88%)',
+    glow:'rgba(75,195,245,0.14)', ms:19,
+    desc:'The only confirmed planet harboring life. Earth\'s liquid water oceans, oxygen-rich atmosphere, and protective magnetic field create a uniquely life-sustaining environment in our solar system.'
+  },
+  {
+    id:'venus', name:'VENUS', eyebrow:'THE VEILED PLANET',
+    dist:'108.2M km', moons:0, period:'225 days', color:'#e8b840',
+    bg:'radial-gradient(circle at 65% 65%, #503000 5%, #a06010 38%, #d09030 65%, #e8b848 88%)',
+    glow:'rgba(225,175,55,0.13)', ms:18,
+    desc:'Venus is the hottest planet despite not being the closest to the Sun. Its dense CO₂ atmosphere traps heat so effectively that surface temperatures reach 465°C — hot enough to melt lead.'
+  },
+  {
+    id:'mercury', name:'MERCURY', eyebrow:'CLOSEST TO THE SUN',
+    dist:'57.9M km', moons:0, period:'88 days', color:'#b8b8b8',
+    bg:'radial-gradient(circle at 65% 65%, #282828 5%, #686868 38%, #a8a8a8 65%, #c8c8c8 88%)',
+    glow:'rgba(155,155,155,0.11)', ms:12,
+    desc:'The smallest planet and nearest to the Sun. With barely any atmosphere to hold heat, Mercury endures the most extreme temperature swings in the solar system — from −180°C at night to 430°C by day.'
+  }
+];
+
+let curr = 4;   // Start on Jupiter
+let busy = false;
+
+/* ── STARFIELD ── */
+(()=>{
+  const sf = document.getElementById('starfield');
+  const frag = document.createDocumentFragment();
+  for(let i=0;i<230;i++){
+    const s = document.createElement('span');
+    const sz  = Math.random()<0.78 ? 1 : Math.random()<0.55 ? 2 : 3;
+    const lo  = (0.1+Math.random()*0.28).toFixed(2);
+    const hi  = (0.65+Math.random()*0.35).toFixed(2);
+    s.style.cssText = `position:absolute;border-radius:50%;background:#fff;`
+      +`width:${sz}px;height:${sz}px;`
+      +`left:${(Math.random()*100).toFixed(2)}%;`
+      +`top:${(Math.random()*100).toFixed(2)}%;`
+      +`--lo:${lo};--hi:${hi};opacity:${lo};`
+      +`animation:twinkle ${(2.5+Math.random()*5).toFixed(1)}s ease-in-out `
+      +`${(Math.random()*7).toFixed(1)}s infinite;`;
+    frag.appendChild(s);
+  }
+  sf.appendChild(frag);
+})();
+
+/* ── BUILD SIDEBAR ── */
+(()=>{
+  const sb = document.getElementById('sidebar');
+  PLANETS.forEach((p,i)=>{
+    const btn = document.createElement('button');
+    btn.className = 'planet-btn'+(i===curr?' active':'');
+    btn.id = 'btn-'+i;
+    btn.style.setProperty('--ac', p.color);
+    const sz = p.ms;
+    btn.innerHTML = `
+      <div class="mini-wrap">
+        <div class="mini-planet" style="width:${sz}px;height:${sz}px;background:${p.bg};"></div>
+      </div>
+      <div>
+        <span class="btn-label">${p.name}</span>
+        <span class="btn-sub">${p.dist}</span>
+      </div>`;
+    btn.addEventListener('click', ()=>goTo(i));
+    sb.appendChild(btn);
+  });
+})();
+
+/* ── NAVIGATION ── */
+document.getElementById('prevBtn').onclick = ()=>goTo(curr>0?curr-1:PLANETS.length-1);
+document.getElementById('nextBtn').onclick = ()=>goTo(curr<PLANETS.length-1?curr+1:0);
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowUp'  ||e.key==='ArrowLeft')  goTo(curr>0?curr-1:PLANETS.length-1);
+  if(e.key==='ArrowDown'||e.key==='ArrowRight') goTo(curr<PLANETS.length-1?curr+1:0);
+});
+
+/* ── PLANET SWITCH ── */
+function goTo(idx){
+  if(busy||idx===curr) return;
+  busy = true;
+  curr = idx;
+
+  // Update sidebar highlights
+  document.querySelectorAll('.planet-btn').forEach((b,i)=>{
+    b.classList.toggle('active', i===idx);
+  });
+
+  // Fade everything out
+  ['eyebrow','stageName','statsRow','stageDesc'].forEach(id=>{
+    document.getElementById(id).classList.add('text-out');
+  });
+  document.getElementById('planetSphere').classList.add('out');
+
+  setTimeout(()=>{
+    render(PLANETS[idx]);
+    ['eyebrow','stageName','statsRow','stageDesc'].forEach(id=>{
+      document.getElementById(id).classList.remove('text-out');
+    });
+    document.getElementById('planetSphere').classList.remove('out');
+    setTimeout(()=>busy=false, 420);
+  }, 380);
+}
+
+/* ── RENDER PLANET ── */
+function render(p){
+  document.getElementById('hdrCurrent').textContent = p.name;
+  document.getElementById('eyebrow').textContent    = p.eyebrow;
+  document.getElementById('stageName').textContent  = p.name;
+
+  const sph = document.getElementById('planetSphere');
+  sph.style.background  = p.bg;
+  sph.style.boxShadow   =
+    `inset -26px -26px 52px rgba(0,0,0,0.65),`
+    +`inset 8px 8px 28px rgba(255,255,255,0.05),`
+    +`0 0 80px ${p.glow}, 0 0 30px ${p.glow}`;
+
+  document.getElementById('planetRing').style.opacity = p.rings ? '1' : '0';
+  document.getElementById('ambient').style.backgroundColor = p.glow;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-item">
+      <span class="stat-val">${p.dist}</span>
+      <span class="stat-lbl">From Sun</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val">${p.moons}</span>
+      <span class="stat-lbl">Known Moons</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val">${p.period}</span>
+      <span class="stat-lbl">Orbital Period</span>
+    </div>`;
+
+  document.getElementById('stageDesc').textContent = p.desc;
+}
+
+// ── INIT ──
+render(PLANETS[curr]);
+</script>
+</body>
+</html>
